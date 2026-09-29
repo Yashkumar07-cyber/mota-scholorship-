@@ -1,13 +1,14 @@
-// MoTA Unified Scholarship Platform - Relational Database Schema
-// Compatible with SQLite (for zero-dependency local dev) and PostgreSQL (for production/Docker)
+// MoTA Unified Scholarship Platform - PostgreSQL Production Schema
+// For deployment with Docker, Supabase, or dedicated PostgreSQL instances
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -142,8 +143,6 @@ model Application {
   scholarshipId    String
   academicYear     String                     // 2025-2026
   status           String                     @default("DRAFT") 
-  // DRAFT, SUBMITTED, INSTITUTE_VERIFICATION, STATE_VERIFICATION, MINISTRY_VERIFICATION,
-  // MANUAL_REVIEW, SANCTIONED, DBT_PROCESSING, DISBURSED, DEFICIENCY, REJECTED
   currentStage     String                     @default("Drafting")
   submissionDate   DateTime?
   sanctionDate     DateTime?
@@ -180,14 +179,11 @@ model Document {
   studentId          String
   applicationId      String?
   documentType       String                 
-  // IDENTITY_AADHAAR, ST_CERTIFICATE, INCOME_CERTIFICATE, ACADEMIC_MARKSHEET,
-  // DOMICILE_CERTIFICATE, BANK_PASSBOOK, DISABILITY_CERTIFICATE, NET_JRF_SCORECARD, OVERSEAS_OFFER_LETTER
   fileName           String
   fileUrl            String
   fileSize           Int                    @default(102400) // bytes
   uploadedAt         DateTime               @default(now())
   verificationStatus String                 @default("PENDING") 
-  // PENDING, VERIFIED, MISMATCH, UNAVAILABLE, MANUAL_REVIEW
   verificationSource String?                // DigiLocker, UIDAI, eDistrict, APAAR, AISHE
   mismatchReason     String?
 
