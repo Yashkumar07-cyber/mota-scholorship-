@@ -9,11 +9,10 @@ frontend/dist/
 backend/dist/
 
 # Environment variables & local secrets
-.env
-.env.local
-.env.*.local
-backend/.env
-frontend/.env
+.env*
+*.env*
+backend/.env*
+frontend/.env*
 
 # Local SQLite databases & cache
 *.db
