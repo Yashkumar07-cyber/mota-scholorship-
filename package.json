@@ -1,0 +1,23 @@
+{
+  "name": "mota-unified-scholarship-platform",
+  "version": "1.0.0",
+  "description": "Ministry of Tribal Affairs (MoTA) Unified Scholarship Platform",
+  "scripts": {
+    "install:all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "build": "npm run vercel-build",
+    "vercel-build": "cd backend && npm install && npx prisma generate --schema=../database/schema.prisma && cd ../frontend && npm install && npm run build",
+    "use:supabase": "npx tsx scripts/switch-db.ts supabase",
+    "use:sqlite": "npx tsx scripts/switch-db.ts sqlite",
+    "db:migrate": "cd backend && npm run prisma:push",
+    "db:seed": "cd backend && npm run db:seed",
+    "db:import": "cd backend && npm run db:import",
+    "db:validate": "cd backend && npm run db:validate",
+    "test": "cd backend && npm test"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}

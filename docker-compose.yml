@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: mota_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: mota_secure_password_2026
+      POSTGRES_DB: mota_scholarship_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - mota_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Optional backend container if running in full docker mode
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mota_backend
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      DATABASE_URL: postgresql://postgres:mota_secure_password_2026@postgres:5432/mota_scholarship_db?schema=public
+      JWT_SECRET: super_secure_mota_tribal_scholarship_secret_key_2026
+      CORS_ORIGIN: http://localhost:5173
+    ports:
+      - "5000:5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  mota_pgdata:

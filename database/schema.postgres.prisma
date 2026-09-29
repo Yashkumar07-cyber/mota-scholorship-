@@ -1,0 +1,327 @@
+// MoTA Unified Scholarship Platform - PostgreSQL Production Schema
+// For deployment with Docker, Supabase, or dedicated PostgreSQL instances
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String          @id @default(uuid())
+  email        String?         @unique
+  mobile       String          @unique
+  passwordHash String
+  role         String          @default("STUDENT") // STUDENT, ADMIN, VERIFICATION_OFFICER
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  
+  student      StudentProfile?
+  admin        AdminUser?
+  notifications Notification[]
+  chatSessions ChatSession[]
+  auditLogs    AuditLog[]
+
+  @@map("users")
+}
+
+model AdminUser {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  department  String   @default("Ministry of Tribal Affairs")
+  designation String   @default("Scholarship Verification Officer")
+  employeeId  String   @unique
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("admin_users")
+}
+
+model StudentProfile {
+  id                   String         @id @default(uuid())
+  userId               String         @unique
+  name                 String
+  dateOfBirth          String         // YYYY-MM-DD
+  gender               String         // MALE, FEMALE, OTHER
+  mobile               String
+  email                String
+  state                String
+  district             String
+  tribeCategory        String         // ST
+  tribeName            String?        // e.g. Gond, Santhal, Bhil, Munda, Toda
+  pvtgStatus           Boolean        @default(false) // Particularly Vulnerable Tribal Group
+  otrId                String         @unique // One-Time Registration ID e.g. OTR-ST-2026-90412
+  institution          String
+  institutionId        String?
+  course               String
+  academicYear         String         // e.g. 2025-2026
+  familyIncome         Float          // Annual family income in INR
+  bankStatus           String         @default("ACTIVE") // ACTIVE, PENDING, REJECTED
+  bankName             String?
+  accountNumberMasked  String?        // e.g. "XXXX-XXXX-4589"
+  ifscCode             String?
+  dbtStatus            String         @default("AADHAAR_SEEDED") // AADHAAR_SEEDED, NOT_SEEDED, INACTIVE
+  profileCompletionPct Int            @default(85)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  user                 User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  familyMembers        FamilyMember[]
+  applications         Application[]
+  documents            Document[]
+  payments             Payment[]
+
+  @@map("student_profiles")
+}
+
+model FamilyMember {
+  id                  String         @id @default(uuid())
+  studentId           String
+  name                String
+  relation            String         // SISTER, BROTHER, FATHER, MOTHER, DEPENDENT
+  age                 Int
+  educationLevel      String         // Class IX, Class XII, Graduate, etc.
+  currentScholarship  String?        // Pre-Matric, Post-Matric, None
+  scholarshipStatus   String?        // Disbursed, Verification, None
+  createdAt           DateTime       @default(now())
+
+  student             StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("family_members")
+}
+
+model Scholarship {
+  id                  String                       @id @default(uuid())
+  name                String
+  code                String                       @unique // PRE_MATRIC, POST_MATRIC, TOP_CLASS, NFST, NOS
+  schemeType          String                       // CENTRALLY_SPONSORED, CENTRAL_SECTOR
+  shortDescription    String
+  detailedDescription String
+  eligibility         String                       // Textual overview
+  benefits            String                       // Textual overview
+  applicationProcess  String                       // Steps
+  requiredDocuments   String                       // JSON string of document array
+  importantDates      String                       // JSON string of timeline
+  sourceUrl           String                       // Official MoTA URL
+  lastVerifiedAt      DateTime                     @default(now())
+  active              Boolean                      @default(true)
+  createdAt           DateTime                     @default(now())
+
+  rules               ScholarshipEligibilityRule[]
+  applications        Application[]
+
+  @@map("scholarships")
+}
+
+model ScholarshipEligibilityRule {
+  id                 String      @id @default(uuid())
+  scholarshipId      String
+  ruleType           String      // INCOME_LIMIT, ACADEMIC_LEVEL, TRIBE_STATUS, PVTG_RESERVATION
+  minIncome          Float?
+  maxIncome          Float?
+  allowedClasses     String?     // Comma separated or JSON string
+  allowedCourses     String?     // Comma separated or JSON string
+  requiredStStatus   Boolean     @default(true)
+  pvtgPriority       Boolean     @default(false)
+  meritCriteria      String?
+  otherCriteriaJson  String?
+
+  scholarship        Scholarship @relation(fields: [scholarshipId], references: [id], onDelete: Cascade)
+
+  @@map("scholarship_eligibility_rules")
+}
+
+model Application {
+  id               String                     @id @default(uuid())
+  applicationId    String                     @unique // e.g. MOTA-2026-000124
+  studentId        String
+  scholarshipId    String
+  academicYear     String                     // 2025-2026
+  status           String                     @default("DRAFT") 
+  currentStage     String                     @default("Drafting")
+  submissionDate   DateTime?
+  sanctionDate     DateTime?
+  rejectionReason  String?
+  remarks          String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+
+  student          StudentProfile             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  scholarship      Scholarship                @relation(fields: [scholarshipId], references: [id], onDelete: Restrict)
+  statusHistory    ApplicationStatusHistory[]
+  documents        Document[]
+  payments         Payment[]
+
+  @@map("applications")
+}
+
+model ApplicationStatusHistory {
+  id            String      @id @default(uuid())
+  applicationId String
+  fromStatus    String
+  toStatus      String
+  remarks       String?
+  changedBy     String      // System, Student, Admin, Verification Officer
+  changedAt     DateTime    @default(now())
+
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@map("application_status_history")
+}
+
+model Document {
+  id                 String                 @id @default(uuid())
+  studentId          String
+  applicationId      String?
+  documentType       String                 
+  fileName           String
+  fileUrl            String
+  fileSize           Int                    @default(102400) // bytes
+  uploadedAt         DateTime               @default(now())
+  verificationStatus String                 @default("PENDING") 
+  verificationSource String?                // DigiLocker, UIDAI, eDistrict, APAAR, AISHE
+  mismatchReason     String?
+
+  student            StudentProfile         @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  application        Application?           @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+  verifications      DocumentVerification[]
+
+  @@map("documents")
+}
+
+model DocumentVerification {
+  id                  String   @id @default(uuid())
+  documentId          String
+  verificationAdapter String   // DigiLockerAdapter, EDistrictAdapter, etc.
+  externalReference   String   // e.g. DL-2026-ST-88194
+  status              String   // VERIFIED, MISMATCH, UNAVAILABLE, MANUAL_REVIEW
+  details             String?  // JSON string
+  verifiedAt          DateTime @default(now())
+
+  document            Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@map("document_verifications")
+}
+
+model Payment {
+  id            String         @id @default(uuid())
+  applicationId String
+  studentId     String
+  amount        Float
+  status        String         @default("PENDING") // PENDING, PROCESSING, CREDITED, FAILED
+  transactionId String?        @unique // PFMS transaction ID
+  paymentDate   DateTime?
+  dbtStatus     String         @default("QUEUED") // QUEUED, SENT_TO_NPCI, CREDITED, RETURNED
+  failureReason String?
+  createdAt     DateTime       @default(now())
+
+  application   Application    @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  student       StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("payments")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  type      String   @default("INFO") // INFO, SUCCESS, WARNING, ACTION_REQUIRED
+  read      Boolean  @default(false)
+  link      String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model ChatSession {
+  id        String        @id @default(uuid())
+  userId    String
+  title     String        @default("Scholarship Assistance")
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id              String      @id @default(uuid())
+  sessionId       String
+  sender          String      // USER, BOT
+  message         String
+  intent          String?     // STATUS_QUERY, ELIGIBILITY_QUERY, DOCUMENT_QUERY, PAYMENT_QUERY, GENERAL
+  contextDataJson String?     // dynamic context queried from DB
+  createdAt       DateTime    @default(now())
+
+  session         ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@map("chat_messages")
+}
+
+model Institution {
+  id         String   @id @default(uuid())
+  name       String
+  code       String   @unique
+  aisheCode  String?
+  udiseCode  String?
+  state      String
+  district   String
+  type       String   // PREMIER_INSTITUTE, UNIVERSITY, COLLEGE, HIGHER_SECONDARY
+  isTopClass Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@map("institutions")
+}
+
+model VerificationSource {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique // DIGILOCKER, UIDAI, APAAR, UDISE, AISHE, EDISTRICT, UGC_NTA
+  isMock      Boolean  @default(true)
+  description String
+
+  @@map("verification_sources")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  userRole  String?
+  action    String   // e.g. APPLICATION_SUBMITTED, DOCUMENT_VERIFIED, MANUAL_REVIEW_APPROVED
+  entity    String   // Application, Document, Payment
+  entityId  String
+  oldValue  String?  // JSON string
+  newValue  String?  // JSON string
+  ipAddress String?  @default("127.0.0.1")
+  createdAt DateTime @default(now())
+
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
+}
+
+model OutreachCandidate {
+  id               String   @id @default(uuid())
+  studentName      String
+  studentReference String   @unique // UDISE-ST-88192
+  state            String
+  district         String
+  educationLevel   String   // Class IX, Class XII, Undergraduate
+  tribeName        String
+  potentialScheme  String   // Pre-Matric, Post-Matric, Top Class
+  matchedDataset   String   // UDISE+, APAAR, OTR
+  outreachStatus   String   @default("UNTOUCHED") // UNTOUCHED, OUTREACH_PLANNED, CONTACTED, ENROLLED, DISMISSED
+  notes            String?
+  createdAt        DateTime @default(now())
+
+  @@map("outreach_candidates")
+}
